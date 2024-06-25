@@ -47,7 +47,7 @@ int main (int argc, char* argv[]) {
   hostAddress.sin_port = htons(PORT);
 
   if ((serverSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-    perror("listening socket failed to make");
+    perror("server socket failed to make");
     exit(EXIT_FAILURE);
   }
 
@@ -105,6 +105,8 @@ int main (int argc, char* argv[]) {
       message = realloc(message, maxMessageLength + 1);
     }
   }
+
+  close(serverSocket);
 
   for (int i = 0; i < connectionLimit; i++) {
     free(clientAddress[i]);
