@@ -7,26 +7,28 @@
 #include <sys/un.h>
 #include <unistd.h>
 #include <sys/select.h>
+#include <arpa/inet.h>
 
 #define PORT 8080
 
 int removeAddress (struct sockaddr_in ** clientList, struct sockaddr_in toBeRemoved, int clientCount) { // removes the first address with the same values as the toBeRemoved variable and slides the rest of the array over.
+  int success = 0;
   for (int i = 0; i < clientCount; i++) {
-    if (*clientList[i] == toBeRemoved) {
+    if (clientList[i]->sin_family == toBeRemoved.sin_family /*&& clientList[i]->sin_port == toBeRemoved.sin_port*/ && clientList[i]->sin_addr.s_addr == toBeRemoved.sin_addr.s_addr) {
       free(clientList[i]);
-      for (int j = i + 1; j < clientCount; j++) {
-        clientList[j - 1] = clientList[j];
-        clientList[j] = NULL;
+      //clientList[i] = NULL;
+      for (int j = i; j < clientCount - 1; j++) {
+        clientList[j] = clientList[j+1];
       }
-      return 1; //an address was removed.
+      //clientList[clientCount] = NULL;
+      success++;
     }
   }
-  return 0; //an address failed to be removed.
+  return success; //an address failed to be removed.
 }
 
-int main (int argc, char* argv[]) {
+int main (/*int argc, char* argv[]*/) {
   int serverSocket, clientSocket;
-  int yes = 1;
   int maxMessageLength = 2047;
   bool kill = false;
   int connectionLimit = 16;
@@ -36,9 +38,9 @@ int main (int argc, char* argv[]) {
   struct sockaddr_in incomingConnection;
   struct sockaddr_in ** clientAddress = malloc(sizeof(struct sockaddr_in*) * connectionLimit); 
   for (int i = 0; i < connectionLimit; i++) { //Make the array of pointers an array of NULL pointers. 
-    *clientAddress[i] = NULL;
+    clientAddress[i] = NULL;
   }
-  socklen_t hostAddLen = sizeof(hostAddress);
+  //socklen_t hostAddLen = sizeof(hostAddress);
   socklen_t incomingConnectionLen = sizeof(incomingConnection);
   char * message = malloc(sizeof(char) * maxMessageLength + 1); 
 
@@ -57,7 +59,7 @@ int main (int argc, char* argv[]) {
   }
 
   while (!kill) {
-    if ((clientSocket = recvfrom(serverSocket, message, sizeof(message), 0, (struct sockaddr*)&incomingConnection, &incomingConnectionLen)) < 0) { //client sees UDP connection and tries to intake data.
+    if ((clientSocket = recvfrom(serverSocket, message, maxMessageLength, 0, (struct sockaddr*)&incomingConnection, &incomingConnectionLen)) < 0) { //client sees UDP connection and tries to intake data.
       //error, why the hell did the recieve fail?
       perror("failed to recieve data.\n");
       exit(EXIT_FAILURE);
@@ -88,17 +90,21 @@ int main (int argc, char* argv[]) {
           clientAddress[activeClients] = malloc(sizeof(struct sockaddr_in)); 
           *clientAddress[activeClients] = incomingConnection;
         } else { //it's a new connection. We need to add it to the end of the list and increase the number of active clients. 
+          printf("New Connection Detected.\n");
           clientAddress[activeClients] = malloc(sizeof(struct sockaddr_in)); 
           *clientAddress[activeClients] = incomingConnection;
+          //printf("%i\n", clientAddress[activeClients]->sin_addr.s_addr);
           activeClients++;
         }
       }
       //fires off a message to every known client in the list. 
       message[clientSocket] = '\0';
+      printf("Trying to transmit message: %s\n", message);
       message = realloc(message, clientSocket+1);
+      printf("Active Client Count: %i\n", activeClients);
       for (int i = 0; i < activeClients; i++) {
-        if (sendto(serverSocket, message, clientSocket+1, 0, clientAddress[i], sizeof(clientAddress[i])) < 0) {
-          perror("failed to transmit data.\n");
+        if (sendto(serverSocket, message, clientSocket+1, 0, (const struct sockaddr*) clientAddress[i], sizeof(*clientAddress[i])) < 0) {
+          perror("failed to transmit data to client.");
           exit(EXIT_FAILURE);
         }
       }
