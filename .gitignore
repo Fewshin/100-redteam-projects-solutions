@@ -9,3 +9,6 @@
 
 # Unignore License
 !LICENSE
+
+# Ingnore VS Code Settings
+.vscode
