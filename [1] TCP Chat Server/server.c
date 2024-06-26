@@ -24,7 +24,7 @@ int main (int argc, char * argv[]) {
   
   struct sockaddr_in hostAddress;
   socklen_t hostAddLen = sizeof(hostAddress);
-  char * outgoing = malloc(sizeof(char) * maxMessageLength + 1); // wtf lmao
+  char * outgoing = malloc(sizeof(char) * maxMessageLength + 1); 
 
   hostAddress.sin_family = AF_INET;
   hostAddress.sin_addr.s_addr = INADDR_ANY;
