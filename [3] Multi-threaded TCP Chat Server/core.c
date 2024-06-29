@@ -9,14 +9,32 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 #include <poll.h>
+//#include <sched.h>
+//#include <pthread.h>
 #include "core.h"
 
 #define PORT 8080
 
+int awaitResponse (struct pollfd * serverSockets, int index, char * confirmationMessage) {
+  int confirmation = poll(&serverSockets[index], 1, 30);
+  int success = 0;
+  if (confirmation < 0) {
+    //error
+  } else if (confirmation == 0 || (confirmation > 0 && serverSockets[index].revents == POLLHUP)) {
+    //uhhh, server didn't respond in a timely manner/disconnected, drop connection.
+    break;
+  } else {
+    //verify confirmation message
+    success++;
+  }
+  serverSockets[index].revents = 0;
+  return success;
+}
+
 int main(/*int argc, char* argv[]*/) {
   int unixCoreSocket;
   int tcpCoreSocket;
-  int connectionLimit = 15; //number of logical cores -1.
+  int connectionLimit = 15; //number of logical cores -1. or not who cares anarchy 
   int denyConnection;
   int activeServers = 2;
   int readMessage;
@@ -25,6 +43,12 @@ int main(/*int argc, char* argv[]*/) {
   bool kill = false;
   int connectionAttempt = 0;
   char * message = malloc(sizeof(char) * maxMessageLength + 1); 
+
+  //cpu_set_t logicalCores;
+  //CPU_ZERO(&logicalCores);
+  //CPU_SET(0, &logicalCores);
+  //sched_setaffinity(0, sizeof(cpu_set_t), &logicalCores);
+
   struct sockaddr_un unixCoreAddress;
   socklen_t unixCoreAddressLen = sizeof(unixCoreAddress);
   unixCoreAddress.sun_family = AF_UNIX;
@@ -118,12 +142,35 @@ int main(/*int argc, char* argv[]*/) {
                 //TODO: Assign the new server its IP. 
                 for (int j = 0; j < connectionLimit; j++) {//checking for the first available IP
                   if (addressList[j].active == false) { 
-                    //Tell the server its new IP address.
-                    //Server does its thing and returns an okay. Do not proceed until an okay has been recieved. Error handling/timeout might be needed. 
-                    //error handling using break?
-                    for (int k = 2; k < activeServers; k++) {
-                      //tell all the existing servers that a new server is being added and what IP address it's being assigned. 
+                    char * ipString = malloc(sizeof(char) * 3);
+                    snprintf(ipString, 3, "%d", addressList[j].ip);
+                    char ipAssignment[21];
+                    strcat(ipAssignment, "Your UNIX IP is: ");
+                    strcat(ipAssignment, *ipString);
+                    if (send(serverSockets[activeServers].fd, ipAssignment, 21, 0) < 0) { //telling the server its IP address.
+                      //error lmao
+                    } else { //waiting for confirmation that the server has its IP address using poll for a timeout.
+                      char * confirmationMessage = malloc(sizeof(char) * 1); //TODO: size this buffer appropriately
+                      if (awaitResponse(serverSockets, activeServers) == 1) {
+                        //ayaya verify confirmation message
+                      } else {
+                        //error screaming in pain I want the end to come right now.
+                        break;
+                      }
+                      free(confirmationMessage);
                     }
+                    char ipCommunication[23];
+                    strcat(ipCommunication, "New client has IP: ");
+                    strcat(ipCommunication, *ipString);
+                    for (int k = 2; k < activeServers; k++) { //telling all the existing servers that a new server is being added and what IP address it's being assigned. 
+                      if (send(serverSockets[k].fd, ipCommunication, 23, 0) < 0) {
+                        //error handling
+                      } else {
+                        //tbd
+                      }
+                    }
+                    free(ipString);
+                    addressList[j].active = true;
                   }
                   activeServers++;
                   break;
@@ -142,6 +189,20 @@ int main(/*int argc, char* argv[]*/) {
           The first server with an available connection needs to connect to the client.
           All other servers need to do nothing. i.e. not just accept every connection comming in to the socket.
           The core needs to tell a chat server to accept a connection.*/
+
+            for (int j = 2; j < activeServers; j++) {
+              if (send(serverSockets[j].fd, penis, 12 inches, 0) < 0) {
+                //error handling
+              } else {
+                char * confirmationMessage = malloc(sizeof(char) * 1); //TODO: Size this buffer
+                if (awaitResponse() == 1) {
+                  //server returned its availability, response needs to be parsed.
+                } else {
+                  //client disconnected. communicate that information to the people of the democratic peoples republic of korea but not really because I think that might be a federal crime.
+                }
+                free(confirmationMessage);
+              }
+            }
 
           } else if (i > 1) { //server is trying to communicate with the core
 
